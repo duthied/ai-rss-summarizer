@@ -2,6 +2,7 @@
 """Phase 1: Minimal viable digest - single-pass approach"""
 
 import os
+import time
 import feedparser
 from anthropic import Anthropic
 from dotenv import load_dotenv
@@ -9,13 +10,19 @@ from datetime import datetime
 
 load_dotenv()
 
-def fetch_feeds(urls, max_items=3):
-    """Fetch items from RSS feeds."""
+def fetch_feeds(urls, max_items=3, timeout=10):
+    """Fetch items from RSS feeds with timeout."""
     items = []
 
     for url in urls:
+        print(f"  Fetching: {url[:60]}...")
         try:
-            feed = feedparser.parse(url)
+            # Set timeout for feedparser
+            feed = feedparser.parse(url, request_headers={'User-Agent': 'RSS-Summarizer/1.0'})
+
+            if feed.bozo and hasattr(feed, 'bozo_exception'):
+                print(f"  ⚠️  Warning: {url[:40]}... - {feed.bozo_exception}")
+
             for entry in feed.entries[:max_items]:
                 items.append({
                     'source': feed.feed.get('title', 'Unknown'),
@@ -23,8 +30,9 @@ def fetch_feeds(urls, max_items=3):
                     'link': entry.get('link', ''),
                     'summary': entry.get('summary', '')[:500]  # Truncate
                 })
+            print(f"  ✓ Got {min(len(feed.entries), max_items)} items")
         except Exception as e:
-            print(f"Failed to fetch {url}: {e}")
+            print(f"  ✗ Failed: {url[:40]}... - {e}")
 
     return items
 
@@ -51,9 +59,16 @@ IMPORTANT: Every interesting point should include a clickable markdown link so r
 
 Be concise and focus on actionable insights."""
 
+    # Calculate dynamic max_tokens based on number of items
+    # Roughly 20 tokens per item + 500 for structure/footer
+    estimated_tokens = (len(items) * 20) + 500
+    max_tokens = max(2000, min(estimated_tokens, 8000))  # Between 2K-8K tokens
+
+    print(f"Using max_tokens={max_tokens:,} for {len(items)} items")
+
     response = client.messages.create(
         model="claude-sonnet-4-5-20250929",
-        max_tokens=3000,  # Increased to handle larger digests
+        max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}]
     )
 
@@ -78,6 +93,8 @@ Be concise and focus on actionable insights."""
     return response.content[0].text, usage_stats
 
 def main():
+    start_time = time.time()
+
     # Read feeds from feeds.md
     with open('feeds.md') as f:
         urls = []
@@ -96,12 +113,17 @@ def main():
     print("Generating digest...")
     digest, usage_stats = create_digest(items)
 
+    # Calculate execution time
+    execution_time = time.time() - start_time
+
     # Add usage stats to digest
     usage_footer = f"""
 
 ---
 
 ## 📊 Generation Stats
+
+**Execution Time:** {execution_time:.1f}s
 
 **Token Usage:**
 - Input tokens: {usage_stats['input_tokens']:,}
@@ -113,9 +135,18 @@ def main():
 **Items processed:** {len(items)} from {len(urls)} feeds
 """
 
-    # Save
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_file = f"reports/digest_simple_{timestamp}.md"
+    # Save with nested date structure
+    now = datetime.now()
+    timestamp = now.strftime("%Y%m%d_%H%M%S")
+
+    # Create nested folders: reports/Month-Year/YYYY-MM-DD/
+    month_folder = now.strftime("%B-%Y")  # e.g., "February-2026"
+    day_folder = now.strftime("%Y-%m-%d")  # e.g., "2026-02-07"
+
+    output_dir = f"reports/{month_folder}/{day_folder}"
+    os.makedirs(output_dir, exist_ok=True)
+
+    output_file = f"{output_dir}/digest_simple_{timestamp}.md"
 
     with open(output_file, 'w') as f:
         f.write(f"# Daily Digest - {datetime.now().strftime('%B %d, %Y')}\n\n")
@@ -123,6 +154,7 @@ def main():
         f.write(usage_footer)
 
     print(f"\n✓ Saved to {output_file}")
+    print(f"⏱️  Execution time: {execution_time:.1f}s")
     print(f"💰 Cost: ${usage_stats['cost']:.4f} ({usage_stats['total_tokens']:,} tokens)")
     print(f"\n{digest[:500]}...")
 
