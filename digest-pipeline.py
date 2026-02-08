@@ -8,6 +8,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import feedparser
+import markdown
 from anthropic import Anthropic
 from dotenv import load_dotenv
 from datetime import datetime
@@ -323,26 +324,120 @@ def send_email(digest_text, stats_text):
         msg['From'] = email_from
         msg['To'] = email_to
 
-        # Convert markdown to simple HTML-friendly format
-        # This is basic - we could use a proper markdown->HTML converter later
+        # Convert markdown to HTML
+        digest_html = markdown.markdown(
+            digest_text,
+            extensions=['extra', 'nl2br', 'sane_lists']
+        )
+        stats_html = markdown.markdown(stats_text, extensions=['extra'])
+
+        # Create styled HTML email
         html_body = f"""
+        <!DOCTYPE html>
         <html>
           <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
-              body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-                     line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }}
-              h1 {{ color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }}
-              h2 {{ color: #34495e; margin-top: 30px; }}
-              h3 {{ color: #7f8c8d; }}
-              a {{ color: #3498db; text-decoration: none; }}
-              a:hover {{ text-decoration: underline; }}
-              .stats {{ background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 30px; font-size: 0.9em; }}
-              hr {{ border: none; border-top: 1px solid #eee; margin: 30px 0; }}
+              body {{
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+                line-height: 1.6;
+                color: #24292e;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #ffffff;
+              }}
+              h1 {{
+                color: #1a1a1a;
+                border-bottom: 3px solid #0366d6;
+                padding-bottom: 10px;
+                margin-top: 0;
+                font-size: 2em;
+              }}
+              h2 {{
+                color: #24292e;
+                margin-top: 35px;
+                margin-bottom: 16px;
+                font-size: 1.5em;
+                border-bottom: 1px solid #e1e4e8;
+                padding-bottom: 8px;
+              }}
+              h3 {{
+                color: #586069;
+                margin-top: 24px;
+                margin-bottom: 12px;
+                font-size: 1.25em;
+              }}
+              h4 {{
+                color: #6a737d;
+                margin-top: 16px;
+                margin-bottom: 8px;
+                font-size: 1em;
+              }}
+              p {{
+                margin-bottom: 16px;
+                line-height: 1.7;
+              }}
+              a {{
+                color: #0366d6;
+                text-decoration: none;
+              }}
+              a:hover {{
+                text-decoration: underline;
+              }}
+              strong {{
+                font-weight: 600;
+                color: #24292e;
+              }}
+              ul, ol {{
+                margin-bottom: 16px;
+                padding-left: 2em;
+              }}
+              li {{
+                margin-bottom: 8px;
+                line-height: 1.7;
+              }}
+              hr {{
+                border: none;
+                border-top: 2px solid #e1e4e8;
+                margin: 30px 0;
+              }}
+              .stats {{
+                background: #f6f8fa;
+                border: 1px solid #e1e4e8;
+                border-radius: 6px;
+                padding: 20px;
+                margin-top: 30px;
+                font-size: 0.95em;
+              }}
+              .stats h2 {{
+                margin-top: 0;
+                font-size: 1.2em;
+                color: #24292e;
+              }}
+              blockquote {{
+                border-left: 4px solid #0366d6;
+                padding-left: 16px;
+                margin-left: 0;
+                color: #586069;
+              }}
+              code {{
+                background: #f6f8fa;
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+                font-size: 0.9em;
+              }}
             </style>
           </head>
           <body>
-            <div style="white-space: pre-wrap;">{digest_text}</div>
-            <div class="stats" style="white-space: pre-wrap;">{stats_text}</div>
+            <div class="digest-content">
+              {digest_html}
+            </div>
+            <div class="stats">
+              {stats_html}
+            </div>
           </body>
         </html>
         """
@@ -381,6 +476,13 @@ def main():
                 urls.append(line[2:])
             elif line.startswith('http'):
                 urls.append(line)
+
+    # Limit feeds for testing if MAX_FEEDS is set
+    max_feeds = os.getenv('MAX_FEEDS')
+    if max_feeds:
+        max_feeds = int(max_feeds)
+        urls = urls[:max_feeds]
+        print(f"⚠️  TEST MODE: Limited to {max_feeds} feeds")
 
     # Create output directory
     now = datetime.now()
