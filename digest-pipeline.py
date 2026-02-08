@@ -14,6 +14,8 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from prompts import get_prompt_for_source, get_category_for_source
+from format_digest import format_digest
 
 load_dotenv()
 
@@ -92,25 +94,9 @@ class ItemSummarizer:
         self.max_workers = max_workers
 
     def summarize_item(self, item):
-        """Summarize a single item."""
-        prompt = f"""Summarize this article concisely:
-
-Title: {item['title']}
-Source: {item['source']}
-URL: {item['link']}
-Content: {item['summary']}
-
-Provide:
-1. One-sentence summary (what happened/what's new)
-2. Why it matters (impact/significance)
-3. 2-3 key topics/tags
-
-Format as JSON:
-{{
-  "summary": "...",
-  "significance": "...",
-  "topics": ["topic1", "topic2", "topic3"]
-}}"""
+        """Summarize a single item using category-specific prompt."""
+        # Get custom prompt based on source
+        prompt = get_prompt_for_source(item['source'], item)
 
         try:
             response = self.client.messages.create(
@@ -286,7 +272,9 @@ class DigestSynthesizer:
             for t in themes.get('themes', [])
         ])
 
-        prompt = f"""Create a comprehensive daily digest from these pre-summarized articles.
+        prompt = f"""Create a professional daily digest from these feed summaries.
+
+Context: This digest covers news, technology, science, and culture for a software developer who wants a well-rounded view of current events.
 
 THEMES IDENTIFIED:
 {themes_text}
@@ -296,17 +284,37 @@ ARTICLE SUMMARIES:
 
 Write a digest with:
 
-1. **Executive Summary** (2-3 sentences highlighting the most significant developments)
+1. EXECUTIVE SUMMARY (2-3 sentences)
+   - Highlight the most significant developments
+   - Focus on actionable insights and emerging trends
 
-2. **Key Themes** (3-5 themes, each with 2-3 bullet points linking to specific stories)
-   - Each bullet should include a [title](URL) link to the story
-   - Explain why the theme matters
+2. BY CATEGORY
 
-3. **Top Stories** (7-10 most important/interesting stories)
-   - Format: **[Title](URL)** - Why it matters and key takeaways
+   ### 🌍 World News
+   - Key developments with geopolitical context
+   - Include [Title](URL) links for each story
+
+   ### 💻 Technology & AI
+   - Product launches, breakthroughs, industry news
+   - Include [Title](URL) links for each story
+
+   ### 🔬 Science & Research
+   - New findings and their implications
+   - Include [Title](URL) links for each story
+
+   ### 📚 Culture & Business
+   - Trends, commentary, market movements
+   - Include [Title](URL) links for each story
+
+3. CROSS-CUTTING THEMES
+   - Connections across categories
+   - Emerging patterns worth noting
+
+4. WORTH YOUR TIME (Top 5-7 Stories)
+   - **[Title](URL)** - Why it matters (1-2 sentences)
    - Prioritize impact, novelty, and reader value
 
-IMPORTANT: Include clickable markdown links throughout. Be concise but insightful."""
+Format: Markdown, professional tone, specific details (names, numbers, dates). Be concise but insightful."""
 
         response = self.client.messages.create(
             model=self.model,
@@ -599,14 +607,25 @@ def main():
 **Items processed:** {len(items)} from {len(urls)} feeds
 """
 
+    # Format digest with metadata and footer
+    formatted_digest = format_digest(
+        result['digest'],
+        items_count=len(items),
+        feeds_count=len(urls),
+        cost_estimate=total_cost
+    )
+
+    # Add title and stats
+    full_digest = f"# Daily Digest - {now.strftime('%B %d, %Y')}\n\n"
+    full_digest += formatted_digest
+    full_digest += stats_footer
+
     # Save final digest
     timestamp = now.strftime("%Y%m%d_%H%M%S")
     output_file = f"{output_dir}/digest_pipeline_{timestamp}.md"
 
     with open(output_file, 'w') as f:
-        f.write(f"# Daily Digest - {now.strftime('%B %d, %Y')}\n\n")
-        f.write(result['digest'])
-        f.write(stats_footer)
+        f.write(full_digest)
 
     logger.info(f"\n{'='*60}")
     logger.info(f"✓ Digest complete!")
@@ -616,8 +635,8 @@ def main():
     logger.info(f"💰 Total cost: ${total_cost:.4f}")
     logger.info(f"{'='*60}")
 
-    # Send email if enabled
-    send_email(result['digest'], stats_footer)
+    # Send email if enabled (use formatted digest for email too)
+    send_email(formatted_digest, stats_footer)
 
 
 if __name__ == "__main__":
