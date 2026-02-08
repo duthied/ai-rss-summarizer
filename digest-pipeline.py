@@ -4,6 +4,7 @@
 import os
 import json
 import time
+import logging
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -17,6 +18,36 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 load_dotenv()
 
 
+def setup_logging(output_dir):
+    """Setup logging to both file and console."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = f"{output_dir}/digest_pipeline_{timestamp}.log"
+
+    # Create logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    # Remove existing handlers
+    logger.handlers = []
+
+    # File handler
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(logging.INFO)
+    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(file_formatter)
+
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_formatter = logging.Formatter('%(message)s')
+    console_handler.setFormatter(console_formatter)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    return logger, log_file
+
+
 class FeedFetcher:
     """Phase 1: Fetch items from RSS feeds"""
 
@@ -25,16 +56,16 @@ class FeedFetcher:
 
     def fetch_all(self, urls):
         """Fetch items from all feeds."""
-        print(f"\n📥 PHASE 1: Fetching from {len(urls)} feeds...")
+        logging.info(f"\n📥 PHASE 1: Fetching from {len(urls)} feeds...")
         items = []
 
         for url in urls:
-            print(f"  Fetching: {url[:60]}...")
+            logging.info(f"  Fetching: {url[:60]}...")
             try:
                 feed = feedparser.parse(url, request_headers={'User-Agent': 'RSS-Summarizer/1.0'})
 
                 if feed.bozo and hasattr(feed, 'bozo_exception'):
-                    print(f"  ⚠️  Warning: {feed.bozo_exception}")
+                    logging.warning(f"  Warning: {feed.bozo_exception}")
 
                 for entry in feed.entries[:self.max_items_per_feed]:
                     items.append({
@@ -44,11 +75,11 @@ class FeedFetcher:
                         'summary': entry.get('summary', entry.get('description', ''))[:1000],
                         'published': entry.get('published', '')
                     })
-                print(f"  ✓ Got {min(len(feed.entries), self.max_items_per_feed)} items")
+                logging.info(f"  ✓ Got {min(len(feed.entries), self.max_items_per_feed)} items")
             except Exception as e:
-                print(f"  ✗ Failed: {e}")
+                logging.error(f"  ✗ Failed: {e}")
 
-        print(f"\n✓ Fetched {len(items)} total items")
+        logging.info(f"\n✓ Fetched {len(items)} total items")
         return items
 
 
@@ -109,7 +140,7 @@ Format as JSON:
                 }
             }
         except Exception as e:
-            print(f"  ✗ Failed to summarize: {item['title'][:50]}... - {e}")
+            logging.error(f"  ✗ Failed to summarize: {item['title'][:50]}... - {e}")
             return {
                 **item,
                 'ai_summary': item['summary'][:200],
@@ -120,7 +151,7 @@ Format as JSON:
 
     def summarize_all(self, items):
         """Summarize all items in parallel."""
-        print(f"\n🤖 PHASE 2: Summarizing {len(items)} items with {self.model}...")
+        logging.info(f"\n🤖 PHASE 2: Summarizing {len(items)} items with {self.model}...")
         summaries = []
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
@@ -130,14 +161,14 @@ Format as JSON:
                 result = future.result()
                 summaries.append(result)
                 if i % 10 == 0:
-                    print(f"  Progress: {i}/{len(items)} items summarized")
+                    logging.info(f"  Progress: {i}/{len(items)} items summarized")
 
         # Calculate total tokens
         total_input = sum(s['tokens']['input'] for s in summaries)
         total_output = sum(s['tokens']['output'] for s in summaries)
 
-        print(f"✓ Summarized {len(summaries)} items")
-        print(f"  Tokens: {total_input:,} input, {total_output:,} output")
+        logging.info(f"✓ Summarized {len(summaries)} items")
+        logging.info(f"  Tokens: {total_input:,} input, {total_output:,} output")
 
         return summaries
 
@@ -151,7 +182,7 @@ class ThemeLinker:
 
     def find_connections(self, summaries):
         """Analyze summaries to find themes and connections."""
-        print(f"\n🔗 PHASE 3: Finding themes and connections...")
+        logging.info(f"\n🔗 PHASE 3: Finding themes and connections...")
 
         # Build compact representation
         items_text = "\n".join([
@@ -207,13 +238,13 @@ IMPORTANT: Return ONLY the JSON object, nothing else. Include only "themes" and 
                 themes_data = json.loads(themes_text)
             except json.JSONDecodeError as je:
                 # Save problematic response for debugging
-                print(f"  ⚠️  JSON parse error, saving raw response to debug")
+                logging.warning(f"  JSON parse error, saving raw response to debug")
                 with open(f"{os.path.dirname(os.path.abspath(__file__))}/theme_debug.txt", 'w') as f:
                     f.write(themes_text)
                 raise je
 
-            print(f"✓ Found {len(themes_data.get('themes', []))} themes")
-            print(f"  Tokens: {response.usage.input_tokens:,} input, {response.usage.output_tokens:,} output")
+            logging.info(f"✓ Found {len(themes_data.get('themes', []))} themes")
+            logging.info(f"  Tokens: {response.usage.input_tokens:,} input, {response.usage.output_tokens:,} output")
 
             return {
                 **themes_data,
@@ -223,8 +254,8 @@ IMPORTANT: Return ONLY the JSON object, nothing else. Include only "themes" and 
                 }
             }
         except Exception as e:
-            print(f"  ✗ Failed to find themes: {e}")
-            print(f"  Continuing without theme analysis...")
+            logging.error(f"  ✗ Failed to find themes: {e}")
+            logging.warning(f"  Continuing without theme analysis...")
             return {'themes': [], 'connections': [], 'tokens': {'input': 0, 'output': 0}}
 
 
@@ -237,7 +268,7 @@ class DigestSynthesizer:
 
     def synthesize(self, summaries, themes):
         """Create final digest from summaries and themes."""
-        print(f"\n✨ PHASE 4: Synthesizing final digest with {self.model}...")
+        logging.info(f"\n✨ PHASE 4: Synthesizing final digest with {self.model}...")
 
         # Build summaries text
         summaries_text = "\n\n".join([
@@ -285,8 +316,8 @@ IMPORTANT: Include clickable markdown links throughout. Be concise but insightfu
 
         digest = response.content[0].text
 
-        print(f"✓ Generated digest")
-        print(f"  Tokens: {response.usage.input_tokens:,} input, {response.usage.output_tokens:,} output")
+        logging.info(f"✓ Generated digest")
+        logging.info(f"  Tokens: {response.usage.input_tokens:,} input, {response.usage.output_tokens:,} output")
 
         return {
             'digest': digest,
@@ -302,7 +333,7 @@ def send_email(digest_text, stats_text):
 
     # Check if email is enabled
     if os.getenv('SEND_EMAIL', 'false').lower() != 'true':
-        print("📧 Email delivery disabled (SEND_EMAIL=false)")
+        logging.info("📧 Email delivery disabled (SEND_EMAIL=false)")
         return False
 
     # Get SMTP configuration
@@ -314,7 +345,7 @@ def send_email(digest_text, stats_text):
     email_to = os.getenv('EMAIL_TO')
 
     if not all([smtp_host, smtp_username, smtp_password, email_to]):
-        print("⚠️  Email not configured properly - check .env file")
+        logging.warning("Email not configured properly - check .env file")
         return False
 
     try:
@@ -450,22 +481,34 @@ def send_email(digest_text, stats_text):
         msg.attach(html_part)
 
         # Send email
-        print(f"\n📧 Sending email to {email_to}...")
+        logging.info(f"\n📧 Sending email to {email_to}...")
         with smtplib.SMTP(smtp_host, smtp_port) as server:
             server.starttls()
             server.login(smtp_username, smtp_password)
             server.send_message(msg)
 
-        print(f"✓ Email sent successfully!")
+        logging.info(f"✓ Email sent successfully!")
         return True
 
     except Exception as e:
-        print(f"✗ Failed to send email: {e}")
+        logging.error(f"✗ Failed to send email: {e}")
         return False
 
 
 def main():
     start_time = time.time()
+
+    # Create output directory first (needed for logging)
+    now = datetime.now()
+    month_folder = now.strftime("%B-%Y")
+    day_folder = now.strftime("%Y-%m-%d")
+    output_dir = f"reports/{month_folder}/{day_folder}"
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Setup logging
+    logger, log_file = setup_logging(output_dir)
+    logger.info(f"Starting digest generation - {now.strftime('%B %d, %Y %H:%M:%S')}")
+    logger.info(f"Log file: {log_file}")
 
     # Read feeds
     with open('feeds.md') as f:
@@ -482,14 +525,7 @@ def main():
     if max_feeds:
         max_feeds = int(max_feeds)
         urls = urls[:max_feeds]
-        print(f"⚠️  TEST MODE: Limited to {max_feeds} feeds")
-
-    # Create output directory
-    now = datetime.now()
-    month_folder = now.strftime("%B-%Y")
-    day_folder = now.strftime("%Y-%m-%d")
-    output_dir = f"reports/{month_folder}/{day_folder}"
-    os.makedirs(output_dir, exist_ok=True)
+        logger.warning(f"TEST MODE: Limited to {max_feeds} feeds")
 
     # Phase 1: Fetch
     fetcher = FeedFetcher(max_items_per_feed=10)
@@ -572,12 +608,13 @@ def main():
         f.write(result['digest'])
         f.write(stats_footer)
 
-    print(f"\n{'='*60}")
-    print(f"✓ Digest complete!")
-    print(f"📄 Saved to: {output_file}")
-    print(f"⏱️  Execution time: {execution_time:.1f}s")
-    print(f"💰 Total cost: ${total_cost:.4f}")
-    print(f"{'='*60}")
+    logger.info(f"\n{'='*60}")
+    logger.info(f"✓ Digest complete!")
+    logger.info(f"📄 Saved to: {output_file}")
+    logger.info(f"📝 Log saved to: {log_file}")
+    logger.info(f"⏱️  Execution time: {execution_time:.1f}s")
+    logger.info(f"💰 Total cost: ${total_cost:.4f}")
+    logger.info(f"{'='*60}")
 
     # Send email if enabled
     send_email(result['digest'], stats_footer)
