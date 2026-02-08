@@ -1,0 +1,18 @@
+# Environment
+.env
+venv/
+__pycache__/
+*.pyc
+
+# Output files
+reports/
+cache/
+*.log
+
+# OS
+.DS_Store
+.vscode/
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/
