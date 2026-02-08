@@ -4,6 +4,9 @@
 import os
 import json
 import time
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import feedparser
 from anthropic import Anthropic
 from dotenv import load_dotenv
@@ -293,6 +296,79 @@ IMPORTANT: Include clickable markdown links throughout. Be concise but insightfu
         }
 
 
+def send_email(digest_text, stats_text):
+    """Send digest via email using SMTP."""
+
+    # Check if email is enabled
+    if os.getenv('SEND_EMAIL', 'false').lower() != 'true':
+        print("📧 Email delivery disabled (SEND_EMAIL=false)")
+        return False
+
+    # Get SMTP configuration
+    smtp_host = os.getenv('SMTP_HOST')
+    smtp_port = int(os.getenv('SMTP_PORT', '587'))
+    smtp_username = os.getenv('SMTP_USERNAME')
+    smtp_password = os.getenv('SMTP_PASSWORD')
+    email_from = os.getenv('EMAIL_FROM', smtp_username)
+    email_to = os.getenv('EMAIL_TO')
+
+    if not all([smtp_host, smtp_username, smtp_password, email_to]):
+        print("⚠️  Email not configured properly - check .env file")
+        return False
+
+    try:
+        # Create message
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f"Daily Digest - {datetime.now().strftime('%B %d, %Y')}"
+        msg['From'] = email_from
+        msg['To'] = email_to
+
+        # Convert markdown to simple HTML-friendly format
+        # This is basic - we could use a proper markdown->HTML converter later
+        html_body = f"""
+        <html>
+          <head>
+            <style>
+              body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+                     line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }}
+              h1 {{ color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }}
+              h2 {{ color: #34495e; margin-top: 30px; }}
+              h3 {{ color: #7f8c8d; }}
+              a {{ color: #3498db; text-decoration: none; }}
+              a:hover {{ text-decoration: underline; }}
+              .stats {{ background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 30px; font-size: 0.9em; }}
+              hr {{ border: none; border-top: 1px solid #eee; margin: 30px 0; }}
+            </style>
+          </head>
+          <body>
+            <div style="white-space: pre-wrap;">{digest_text}</div>
+            <div class="stats" style="white-space: pre-wrap;">{stats_text}</div>
+          </body>
+        </html>
+        """
+
+        # Attach both plain text and HTML versions
+        text_part = MIMEText(digest_text + "\n\n" + stats_text, 'plain')
+        html_part = MIMEText(html_body, 'html')
+
+        msg.attach(text_part)
+        msg.attach(html_part)
+
+        # Send email
+        print(f"\n📧 Sending email to {email_to}...")
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_username, smtp_password)
+            server.send_message(msg)
+
+        print(f"✓ Email sent successfully!")
+        return True
+
+    except Exception as e:
+        print(f"✗ Failed to send email: {e}")
+        return False
+
+
 def main():
     start_time = time.time()
 
@@ -399,7 +475,10 @@ def main():
     print(f"📄 Saved to: {output_file}")
     print(f"⏱️  Execution time: {execution_time:.1f}s")
     print(f"💰 Total cost: ${total_cost:.4f}")
-    print(f"{'='*60}\n")
+    print(f"{'='*60}")
+
+    # Send email if enabled
+    send_email(result['digest'], stats_footer)
 
 
 if __name__ == "__main__":
