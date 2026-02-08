@@ -29,7 +29,7 @@ def fetch_feeds(urls, max_items=3):
     return items
 
 def create_digest(items):
-    """Create digest using single Claude call."""
+    """Create digest using single Claude call. Returns (digest_text, usage_stats, cost)."""
     client = Anthropic()
 
     # Build compact prompt with links
@@ -57,7 +57,25 @@ Be concise and focus on actionable insights."""
         messages=[{"role": "user", "content": prompt}]
     )
 
-    return response.content[0].text
+    # Extract usage stats
+    usage = response.usage
+    input_tokens = usage.input_tokens
+    output_tokens = usage.output_tokens
+
+    # Calculate cost (Claude Sonnet 4.5 pricing)
+    # Input: $3.00 per million tokens, Output: $15.00 per million tokens
+    input_cost = (input_tokens / 1_000_000) * 3.00
+    output_cost = (output_tokens / 1_000_000) * 15.00
+    total_cost = input_cost + output_cost
+
+    usage_stats = {
+        'input_tokens': input_tokens,
+        'output_tokens': output_tokens,
+        'total_tokens': input_tokens + output_tokens,
+        'cost': total_cost
+    }
+
+    return response.content[0].text, usage_stats
 
 def main():
     # Read feeds from feeds.md
@@ -76,7 +94,24 @@ def main():
     print(f"Collected {len(items)} items\n")
 
     print("Generating digest...")
-    digest = create_digest(items)
+    digest, usage_stats = create_digest(items)
+
+    # Add usage stats to digest
+    usage_footer = f"""
+
+---
+
+## 📊 Generation Stats
+
+**Token Usage:**
+- Input tokens: {usage_stats['input_tokens']:,}
+- Output tokens: {usage_stats['output_tokens']:,}
+- Total tokens: {usage_stats['total_tokens']:,}
+
+**Cost:** ${usage_stats['cost']:.4f}
+
+**Items processed:** {len(items)} from {len(urls)} feeds
+"""
 
     # Save
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -85,9 +120,11 @@ def main():
     with open(output_file, 'w') as f:
         f.write(f"# Daily Digest - {datetime.now().strftime('%B %d, %Y')}\n\n")
         f.write(digest)
+        f.write(usage_footer)
 
-    print(f"\n✓ Saved to {output_file}\n")
-    print(digest[:500] + "...")
+    print(f"\n✓ Saved to {output_file}")
+    print(f"💰 Cost: ${usage_stats['cost']:.4f} ({usage_stats['total_tokens']:,} tokens)")
+    print(f"\n{digest[:500]}...")
 
 if __name__ == "__main__":
     main()
