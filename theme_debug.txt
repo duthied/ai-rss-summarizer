@@ -1,0 +1,75 @@
+{
+  "themes": [
+    {
+      "name": "AI Integration Across Industries",
+      "description": "AI is rapidly moving from research/hype into practical deployment across software development, enterprise, healthcare, and creative industries, with both promising results and cautionary tales about limitations and failures",
+      "story_indices": [37, 40, 43, 44, 46, 56, 57, 58, 59, 64, 65, 66, 68, 69, 70, 71, 73, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174]
+    },
+    {
+      "name": "The 'Vibes Over Rules' Ethos in 2026",
+      "description": "A new development paradigm ('vibe coding') is emerging where non-technical people and AI collaboratively build production software without traditional programming expertise, reflecting broader cultural shift toward intuition-driven workflows",
+      "story_indices": [56, 57, 58, 73, 74, 152, 156, 157, 158]
+    },
+    {
+      "name": "Democratic Backsliding and Political Extremism",
+      "description": "Multiple stories reveal concerning patterns of far-right infiltration of mainstream political parties, disinformation campaigns, restrictions on democratic speech (zombie court orders), and weaponization of state institutions against marginalized groups",
+      "story_indices": [82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 115, 116, 117, 118, 119, 120, 121, 122]
+    },
+    {
+      "name": "Healthcare System Collapse and Inequality",
+      "description": "Systemic failures across multiple healthcare systems (US physician shortage, refugee healthcare cuts, Canada's food insecurity) converge with inadequate infrastructure and funding, disproportionately harming vulnerable populations",
+      "story_indices": [47, 48, 50, 51, 84, 98, 99, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112]
+    },
+    {
+      "name": "Historical Knowledge and Cultural Preservation",
+      "description": "Stories celebrating documentation of endangered knowledge systems—from Edo sustainability practices to ancient khipu, slang dictionaries, and medieval manuscripts—revealing how historical knowledge offers solutions to contemporary problems",
+      "story_indices": [0, 1, 2, 9, 10, 11, 12, 13, 14, 15, 16]
+    }
+  ],
+  "connections": [
+    {
+      "items": [56, 57, 73, 152, 156],
+      "connection": "Non-technical individuals using AI to build software (vibe coding) creates both opportunity for democratized development and risk of inadequate testing/security practices, paralleled by warnings about AI product failures in enterprise settings"
+    },
+    {
+      "items": [37, 40, 43, 46, 73],
+      "connection": "Enterprise AI deployment stories reveal recurring pattern: early hype (AI agents replacing sales teams) meets reality (50+ AI products fail at major tech companies), suggesting dangerous gap between marketing and actual effectiveness"
+    },
+    {
+      "items": [48, 84, 99, 101],
+      "connection": "Healthcare access crisis in Canada/US mirrors brain drain pattern where US researchers fleeing to Europe—both reflect institutional failure and resource depletion at systemic level"
+    },
+    {
+      "items": [82, 85, 87, 93],
+      "connection": "Pierre Poilievre's corporate lobbyist council and far-right infiltration efforts parallel Trump's racist video refusal to apologize—coordinated pattern of normalizing extremism through institutional capture"
+    },
+    {
+      "items": [0, 14, 20],
+      "connection": "Edo's sustainability transformation, khipu record-keeping systems, and Woody Guthrie's inscribed guitar all demonstrate how historical/cultural knowledge systems embed values (sustainability, efficiency, justice) that pre-date and may outlast contemporary technological solutions"
+    },
+    {
+      "items": [65, 109, 110, 111],
+      "connection": "AI-driven medical diagnosis breakthroughs in Rwanda/Pakistan contrast sharply with quantum computing security vulnerabilities and consciousness definition crises—AI effectiveness varies dramatically based on task specificity and implementation context"
+    },
+    {
+      "items": [66, 67, 100, 113],
+      "connection": "Scientific integrity crisis: Epstein's deeper scientist ties, AI agents self-publishing without oversight, and climate data manipulation (methane underreporting) reveal institutional failures across academia and research funding"
+    },
+    {
+      "items": [60, 61, 62],
+      "connection": "Japanese and Thai democratic elections amid regional security tensions suggest Asia-Pacific region balancing between authoritarian and reformist trajectories—global indicator of democratic stress"
+    },
+    {
+      "items": [47, 50, 51],
+      "connection": "US healthcare crisis (doctor shortage, insurance decline) makes Super Bowl ad spending and TV cost increases seem disconnected, but both reflect wealth concentration and devaluation of essential services"
+    },
+    {
+      "items": [124, 125, 126],
+      "connection": "Birth control prescription requirements, return-to-office mandates without infrastructure, and carbon monoxide detection failures all represent government/institutional decisions disconnected from evidence and user needs"
+    }
+  ],
+  "patterns": {
+    "emerging_trends": [
+      {
+        "trend": "Reality-Check Phase for AI",
+        "evidence": "Shift from 'AI will replace entire teams' (Jason Lemkin, SaaStr) to 'why most AI products fail' and 'vibe coding limitations'—suggests hype cycle entering dis
