@@ -32,9 +32,9 @@ def create_digest(items):
     """Create digest using single Claude call."""
     client = Anthropic()
 
-    # Build compact prompt
+    # Build compact prompt with links
     items_text = "\n\n".join([
-        f"**{item['source']}**: {item['title']}\n{item['summary']}"
+        f"**{item['source']}**: {item['title']}\nURL: {item['link']}\n{item['summary']}"
         for item in items
     ])
 
@@ -44,8 +44,10 @@ def create_digest(items):
 
 Write a brief report with:
 1. Executive Summary (2-3 sentences)
-2. Key Themes (3-5 themes)
-3. Top Stories (5 stories with [Title](link) format)
+2. Key Themes (3-5 themes, with each point including a [title](link) to the relevant story)
+3. Top Stories (5-7 most interesting stories with [Title](link) format and brief explanation)
+
+IMPORTANT: Every interesting point should include a clickable markdown link so readers can learn more. Use the actual URLs from the feed items provided above.
 
 Be concise and focus on actionable insights."""
 
@@ -70,7 +72,7 @@ def main():
                 urls.append(line)
 
     print(f"Fetching {len(urls)} feeds...")
-    items = fetch_feeds(urls, max_items=3)
+    items = fetch_feeds(urls, max_items=10)
     print(f"Collected {len(items)} items\n")
 
     print("Generating digest...")
