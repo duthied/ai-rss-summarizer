@@ -16,6 +16,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from prompts import get_prompt_for_source, get_category_for_source
 from format_digest import format_digest
+from dedup import DedupState, get_item_identifier
 
 load_dotenv()
 
@@ -56,10 +57,26 @@ class FeedFetcher:
     def __init__(self, max_items_per_feed=10):
         self.max_items_per_feed = max_items_per_feed
 
+        # Initialize deduplication
+        self.dedup_enabled = os.getenv('DEDUP_ENABLED', 'true').lower() == 'true'
+        if self.dedup_enabled:
+            lookback_days = int(os.getenv('DEDUP_LOOKBACK_DAYS', '7'))
+            state_file = os.getenv('DEDUP_STATE_FILE', 'reports/.dedup_state.json')
+            self.dedup_state = DedupState(state_file=state_file, lookback_days=lookback_days)
+            self.dedup_state.cleanup_old_entries()
+        else:
+            logging.info("  Deduplication disabled (DEDUP_ENABLED=false)")
+
     def fetch_all(self, urls):
-        """Fetch items from all feeds."""
+        """Fetch items from all feeds with deduplication."""
         logging.info(f"\n📥 PHASE 1: Fetching from {len(urls)} feeds...")
         items = []
+        stats = {
+            'fetched': 0,
+            'duplicates_seen_before': 0,
+            'duplicates_in_batch': 0
+        }
+        seen_in_batch = set()
 
         for url in urls:
             logging.info(f"  Fetching: {url[:60]}...")
@@ -69,19 +86,68 @@ class FeedFetcher:
                 if feed.bozo and hasattr(feed, 'bozo_exception'):
                     logging.warning(f"  Warning: {feed.bozo_exception}")
 
+                feed_new_items = 0
+                feed_skipped = 0
+
                 for entry in feed.entries[:self.max_items_per_feed]:
-                    items.append({
+                    # Generate unique identifier
+                    id_type, identifier = get_item_identifier(entry)
+                    full_id = f"{id_type}:{identifier}"
+
+                    # Check if seen in previous runs
+                    if self.dedup_enabled and self.dedup_state.is_seen(full_id):
+                        stats['duplicates_seen_before'] += 1
+                        feed_skipped += 1
+                        continue
+
+                    # Check if duplicate within this batch (cross-feed duplicates)
+                    if full_id in seen_in_batch:
+                        stats['duplicates_in_batch'] += 1
+                        feed_skipped += 1
+                        continue
+
+                    # New item - add to results
+                    item = {
                         'source': feed.feed.get('title', 'Unknown'),
                         'title': entry.get('title', 'Untitled'),
                         'link': entry.get('link', ''),
                         'summary': entry.get('summary', entry.get('description', ''))[:1000],
-                        'published': entry.get('published', '')
-                    })
-                logging.info(f"  ✓ Got {min(len(feed.entries), self.max_items_per_feed)} items")
+                        'published': entry.get('published', ''),
+                        '_dedup_id': full_id  # For tracking
+                    }
+
+                    items.append(item)
+                    seen_in_batch.add(full_id)
+                    stats['fetched'] += 1
+                    feed_new_items += 1
+
+                    # Mark as seen
+                    if self.dedup_enabled:
+                        self.dedup_state.mark_seen(
+                            full_id,
+                            item['source'],
+                            item['title']
+                        )
+
+                if feed_new_items > 0 or feed_skipped > 0:
+                    logging.info(f"  ✓ Got {feed_new_items} new items ({feed_skipped} skipped)")
+
             except Exception as e:
                 logging.error(f"  ✗ Failed: {e}")
 
-        logging.info(f"\n✓ Fetched {len(items)} total items")
+        # Save dedup state
+        if self.dedup_enabled:
+            self.dedup_state.save()
+
+        # Log summary
+        logging.info(f"\n📊 DEDUPLICATION SUMMARY:")
+        logging.info(f"  - New items to process: {len(items)}")
+        logging.info(f"  - Skipped (seen before): {stats['duplicates_seen_before']}")
+        logging.info(f"  - Skipped (duplicate in batch): {stats['duplicates_in_batch']}")
+        if self.dedup_enabled:
+            logging.info(f"  - State size: {len(self.dedup_state.state['items'])} items tracked")
+
+        logging.info(f"\n✓ Fetched {len(items)} NEW items")
         return items
 
 
@@ -314,7 +380,9 @@ Write a digest with:
    - **[Title](URL)** - Why it matters (1-2 sentences)
    - Prioritize impact, novelty, and reader value
 
-Format: Markdown, professional tone, specific details (names, numbers, dates). Be concise but insightful."""
+Format: Markdown, professional tone, specific details (names, numbers, dates). Be concise but insightful.
+
+IMPORTANT: Do NOT include any "Actions", "Action Items", "Recommended Actions", or similar sections. The digest should be informational only."""
 
         response = self.client.messages.create(
             model=self.model,

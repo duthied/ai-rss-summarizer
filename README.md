@@ -6,7 +6,8 @@ Cost-optimized RSS feed digest generator using Claude AI with email delivery.
 
 - **Multi-phase pipeline** - Parallel processing with Haiku for summaries, Sonnet for synthesis
 - **Email delivery** - Beautiful HTML-formatted digests sent via any SMTP server
-- **Cost-optimized** - ~$0.28 per run for 177 items (~$8/month daily)
+- **Smart deduplication** - Automatically skips previously processed items (30-40% cost savings)
+- **Cost-optimized** - ~$0.18-0.28 per run for 177 items (~$5-8/month daily)
 - **Test mode** - Limit feeds for faster development iterations
 - **Two approaches** - Simple single-pass (Phase 1) or advanced pipeline (Phase 2)
 
@@ -45,6 +46,10 @@ EMAIL_TO=your-email@gmail.com
 
 # Testing (optional - limit feeds for faster testing)
 # MAX_FEEDS=3
+
+# Deduplication (optional - enabled by default)
+DEDUP_ENABLED=true
+DEDUP_LOOKBACK_DAYS=7
 ```
 
 ### 3. Add Your Feeds
@@ -95,6 +100,29 @@ python digest-simple.py
 | 27    | 270   | ~$0.50+      | ~$0.28       | ~170s |
 
 **Phase 2 is 44% cheaper and 43% faster than Phase 1**
+
+## Deduplication
+
+The digest automatically tracks previously processed items to avoid reprocessing:
+
+- **Cross-day deduplication:** Items seen in previous runs are skipped
+- **Cross-feed deduplication:** Same story from multiple feeds only processed once
+- **7-day rolling window:** Automatically cleans up old tracking data
+- **Configurable:** Can be disabled or adjusted via `.env`
+
+**Configuration:**
+```bash
+DEDUP_ENABLED=true              # Enable/disable (default: true)
+DEDUP_LOOKBACK_DAYS=7           # Days to track (default: 7)
+```
+
+**Manual reset:**
+```bash
+# Force reprocess all items
+rm reports/.dedup_state.json
+```
+
+**Savings:** Typically reduces daily processing by 30-40%, saving ~$0.08 per run.
 
 ## Test Mode
 

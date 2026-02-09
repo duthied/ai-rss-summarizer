@@ -9,6 +9,11 @@ reports/
 cache/
 *.log
 
+# Deduplication state
+reports/.dedup_state.json
+reports/.dedup_state.tmp
+reports/.dedup_state.corrupt
+
 # OS
 .DS_Store
 .vscode/
