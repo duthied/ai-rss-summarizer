@@ -188,9 +188,9 @@ Phase 4: Synthesize
 
 ## Automation
 
-### Cron (Daily at 8 AM)
+### Cron (Daily at 4 AM)
 ```bash
-0 8 * * * cd ~/src/ai-rss-summarizer && source venv/bin/activate && python digest-pipeline.py
+0 4 * * * cd ~/src/ai-rss-summarizer && source venv/bin/activate && python digest-pipeline.py &> /dev/null
 ```
 
 ### Launchd (macOS)
