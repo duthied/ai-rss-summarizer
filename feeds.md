@@ -117,3 +117,6 @@
 
 ## Uncategorized
 - https://hnrss.org/frontpage
+
+## Security
+- https://techcrunch.com/author/zack-whittaker/feed/
